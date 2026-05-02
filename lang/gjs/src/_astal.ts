@@ -1,10 +1,16 @@
+/* prettier-ignore */
 import Variable from "./variable.js"
-import { execAsync } from "./process.js"
-import Binding, { Connectable, kebabify, snakeify, Subscribable } from "./binding.js"
+import { execAsync } from "./process.js";
+import Binding, {
+  Connectable,
+  kebabify,
+  snakeify,
+  Subscribable,
+} from "./binding.js";
 
-export const noImplicitDestroy = Symbol("no no implicit destroy")
-export const setChildren = Symbol("children setter method")
-
+export const noImplicitDestroy = Symbol("no no implicit destroy");
+export const setChildren = Symbol("children setter method");
+/* prettier-ignore */
 export function mergeBindings(array: any[]) {
     function getValues(...args: any[]) {
         let i = 0
@@ -24,7 +30,7 @@ export function mergeBindings(array: any[]) {
 
     return Variable.derive(bindings, getValues)()
 }
-
+/* prettier-ignore */
 export function setProp(obj: any, prop: string, value: any) {
     try {
         const setter = `set_${snakeify(prop)}`
@@ -36,11 +42,11 @@ export function setProp(obj: any, prop: string, value: any) {
         console.error(`could not set property "${prop}" on ${obj}:`, error)
     }
 }
-
+/* prettier-ignore */
 export type BindableProps<T> = {
     [K in keyof T]: Binding<T[K]> | T[K];
 }
-
+/* prettier-ignore */
 export function hook<Widget extends Connectable>(
     widget: Widget,
     object: Connectable | Subscribable,
@@ -61,7 +67,7 @@ export function hook<Widget extends Connectable>(
         widget.connect("destroy", unsub)
     }
 }
-
+/* prettier-ignore */
 export function construct<Widget extends Connectable & { [setChildren]: (children: any[]) => void }>(widget: Widget, config: any) {
     // eslint-disable-next-line prefer-const
     let { setup, child, children = [], ...props } = config
@@ -157,11 +163,12 @@ export function construct<Widget extends Connectable & { [setChildren]: (childre
     setup?.(widget)
     return widget
 }
-
+/* prettier-ignore */
 function isArrowFunction(func: any): func is (args: any) => any {
-    return !Object.hasOwn(func, "prototype")
+    // REPARACIÓN: Si es un widget astalificado, queremos que sea tratado como función.
+    return !Object.prototype.hasOwnProperty.call(func, "prototype") || func.prototype === undefined;
 }
-
+/* prettier-ignore */
 export function jsx(
     ctors: Record<string, { new(props: any): any } | ((props: any) => any)>,
     ctor: string | ((props: any) => any) | { new(props: any): any },
