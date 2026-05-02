@@ -11,32 +11,53 @@ import * as Widget from "./widget.js";
 
 type AstalComponent<P> = (props: P) => Gtk.Widget;
 
-export function Fragment({
-  children = [],
-  child,
-}: {
-  child?: BindableChild;
-  children?: Array<BindableChild>;
-}) {
-  if (child) children.push(child);
-  return mergeBindings(children);
+export function Fragment({ children = [], child }: any): any {
+    if (child) children.push(child);
+
+    // REPARACIÓN KITSUNE: Código limpio sin etiquetas de editor
+    const arr = Array.isArray(children) ? children : (children ? [children] : []);
+    return mergeBindings(arr.flat(Infinity));
 }
 
 /**
  * JSX Factory especializado para GTK4
  * Intercepta componentes funcionales para forzar la creación de contexto
  */
-export function jsx<P extends object>(
-  ctor: keyof typeof ctors | typeof Gtk.Widget | AstalComponent<P>,
-  props: P,
-) {
-  if (typeof ctor === "function" && !(ctor.prototype instanceof Gtk.Widget)) {
-    // Es un componente funcional (ej: Island)
-    return context(() => (ctor as AstalComponent<P>)(props));
-  }
+export function jsx(ctor: any, inprops: any, key: any): any {
+     // REPARACIÓN KITSUNE: Extraemos setup para proteger el motor nativo
+     const { $, $type, $constructor, children, setup, ...rest } = inprops;
+     const props = rest;
+     if (key) props.key = key;
 
-  // Es un widget intrínseco astalificado
-  return _jsx(ctors, ctor as any, props);
+     // 1. Manejo de strings (ej: <box />)
+     if (typeof ctor === "string") {
+         if (ctor in ctors) {
+             ctor = (ctors as any)[ctor];
+         } else {
+             throw Error(`Kitsune-Engine: Unknown element "${ctor}"`);
+         }
+     }
+
+     // 2. Identificar si es un Componente Funcional (como NetworkPopup)
+     // En GJS, los Widgets nativos heredan de Gtk.Widget y tienen prototipo.
+     // Las funciones de flecha NO tienen prototipo.
+     const isFunctional = typeof ctor === "function" && !ctor.prototype;
+
+     if (isFunctional) {
+         // Si es funcional, lo llamamos directamente pasando props y children
+         // Usamos el contexto para mantener la reactividad de Astal
+         return context({ cleanups: [] }, () => ctor({ ...props, children, setup }));
+     }
+
+     // 3. Si es una clase (Widget nativo), usamos 'new'
+     const widget = new ctor(props);
+
+     // Aplicamos el setup manualmente al final
+     if (setup && typeof setup === "function") {
+         setup(widget);
+     }
+
+     return widget;
 }
 
 const ctors = {
@@ -55,6 +76,8 @@ const ctors = {
   window: Widget.Window,
   menubutton: Widget.MenuButton,
   popover: Widget.Popover,
+  // REPARACIÓN: Registro del contenedor de scroll
+  scrolledwindow: Widget.ScrolledWindow,
 };
 
 declare global {
@@ -77,6 +100,7 @@ declare global {
       window: Widget.WindowProps;
       menubutton: Widget.MenuButtonProps;
       popover: Widget.PopoverProps;
+      scrolledwindow: any;
     }
   }
 }

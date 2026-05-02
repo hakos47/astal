@@ -68,100 +68,103 @@ export function hook<Widget extends Connectable>(
     }
 }
 /* prettier-ignore */
-export function construct<Widget extends Connectable & { [setChildren]: (children: any[]) => void }>(widget: Widget, config: any) {
-    // eslint-disable-next-line prefer-const
-    let { setup, child, children = [], ...props } = config
+/* ~/test-wayland/astal/lang/gjs/src/_astal.ts */
 
-    if (children instanceof Binding) {
-        children = [children]
-    }
+export function construct(widget: any, props: any) {
+    // 1. DESESTRUCTURACIÓN COMPLETA: Extraemos 'child' para evitar ReferenceError
+    const { child, children: initialChildren, setup, ...rest } = props;
 
+    // 2. NORMALIZACIÓN ATÓMICA DE HIJOS: Previene 'children.flat is not a function'
+    // Convertimos cualquier entrada (null, undefined, objeto único o array) en un array real.
+    let children: any[] = Array.isArray(initialChildren)
+        ? initialChildren
+        : (initialChildren ? [initialChildren] : []);
+
+    // 3. INTEGRACIÓN DE HIJO ÚNICO (Patrón JSX)
     if (child) {
-        children.unshift(child)
+        children.unshift(child);
     }
 
-    // remove undefined values
-    for (const [key, value] of Object.entries(props)) {
+    // 4. LIMPIEZA DE 'rest' (Evitamos procesar children/setup como propiedades de GObject)
+    for (const [key, value] of Object.entries(rest)) {
         if (value === undefined) {
-            delete props[key]
+            delete rest[key];
         }
     }
 
-    // collect bindings
+    // 5. RECOLECCIÓN DE BINDINGS
     const bindings: Array<[string, Binding<any>]> = Object
-        .keys(props)
+        .keys(rest)
         .reduce((acc: any, prop) => {
-            if (props[prop] instanceof Binding) {
-                const binding = props[prop]
-                delete props[prop]
-                return [...acc, [prop, binding]]
+            if (rest[prop] instanceof Binding) {
+                const binding = rest[prop];
+                delete rest[prop];
+                return [...acc, [prop, binding]];
             }
-            return acc
-        }, [])
+            return acc;
+        }, []);
 
-    // collect signal handlers
+    // 6. RECOLECCIÓN DE SEÑALES (onEvent)
     const onHandlers: Array<[string, string | (() => unknown)]> = Object
-        .keys(props)
+        .keys(rest)
         .reduce((acc: any, key) => {
             if (key.startsWith("on")) {
-                const sig = kebabify(key).split("-").slice(1).join("-")
-                const handler = props[key]
-                delete props[key]
-                return [...acc, [sig, handler]]
+                const sig = kebabify(key).split("-").slice(1).join("-");
+                const handler = rest[key];
+                delete rest[key];
+                return [...acc, [sig, handler]];
             }
-            return acc
-        }, [])
+            return acc;
+        }, []);
 
-    // set children
-    const mergedChildren = mergeBindings(children.flat(Infinity))
+    // 7. RENDERIZADO DE HIJOS Y REACTIVIDAD
+    // Usamos el array ya normalizado 'children', garantizando que .flat() funcione.
+    const mergedChildren = mergeBindings(children.flat(Infinity));
     if (mergedChildren instanceof Binding) {
-        widget[setChildren](mergedChildren.get())
+        widget[setChildren](mergedChildren.get());
         widget.connect("destroy", mergedChildren.subscribe((v) => {
-            widget[setChildren](v)
-        }))
-    } else {
-        if (mergedChildren.length > 0) {
-            widget[setChildren](mergedChildren)
-        }
+            widget[setChildren](v);
+        }));
+    } else if (Array.isArray(mergedChildren) && mergedChildren.length > 0) {
+        widget[setChildren](mergedChildren);
     }
 
-    // setup signal handlers
+    // 8. CONFIGURACIÓN DE SEÑALES
     for (const [signal, callback] of onHandlers) {
         const sig = signal.startsWith("notify")
             ? signal.replace("-", "::")
-            : signal
+            : signal;
 
         if (typeof callback === "function") {
-            widget.connect(sig, callback)
+            widget.connect(sig, callback);
         } else {
-            widget.connect(sig, () => execAsync(callback)
-                .then(print).catch(console.error))
+            widget.connect(sig, () => execAsync(callback as string)
+                .then(print).catch(console.error));
         }
     }
 
-    // setup bindings handlers
+    // 9. CONFIGURACIÓN DE BINDINGS DE PROPIEDADES
     for (const [prop, binding] of bindings) {
         if (prop === "child" || prop === "children") {
             widget.connect("destroy", binding.subscribe((v: any) => {
-                widget[setChildren](v)
-            }))
+                widget[setChildren](v);
+            }));
         }
         widget.connect("destroy", binding.subscribe((v: any) => {
-            setProp(widget, prop, v)
-        }))
-        setProp(widget, prop, binding.get())
+            setProp(widget, prop, v);
+        }));
+        setProp(widget, prop, binding.get());
     }
 
-    // filter undefined values
-    for (const [key, value] of Object.entries(props)) {
-        if (value === undefined) {
-            delete props[key]
-        }
+    // 10. ASIGNACIÓN FINAL Y SETUP
+    // Asignamos solo las propiedades restantes puras (rest)
+    Object.assign(widget, rest);
+
+    if (typeof setup === "function") {
+        setup(widget);
     }
 
-    Object.assign(widget, props)
-    setup?.(widget)
-    return widget
+    return widget;
 }
 /* prettier-ignore */
 function isArrowFunction(func: any): func is (args: any) => any {
@@ -197,4 +200,11 @@ export function jsx(
         return ctor(props)
 
     return new ctor(props)
+}
+
+export let currentContext = null;
+export function context(ctx, cb) {
+    const prev = currentContext;
+    currentContext = ctx;
+    try { return cb(); } finally { currentContext = prev; }
 }

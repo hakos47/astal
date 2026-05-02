@@ -25,22 +25,21 @@ function _getChildren(widget: Gtk.Widget): Array<Gtk.Widget> {
   return children;
 }
 
-function _setChildren(widget: Gtk.Widget, children: any[]) {
-  children = children
-    .flat(Infinity)
-    .map((ch) =>
-      ch instanceof Gtk.Widget
-        ? ch
-        : new Gtk.Label({ visible: true, label: String(ch) }),
-    );
+function _setChildren(widget: Gtk.Widget, children: any): void {
+    // REPARACIÓN: Código limpio sin 'arg:' ni 'callbackfn:'
+    const arr = Array.isArray(children) ? children : (children ? [children] : []);
 
-  for (const child of children) {
-    widget.vfunc_add_child(
-      dummyBulder,
-      child,
-      type in child ? (child as any)[type] : null,
-    );
-  }
+    const processed = arr
+        .flat(Infinity)
+        .map((ch: any) =>
+            ch instanceof Gtk.Widget
+                ? ch
+                : new Gtk.Label({ visible: true, label: String(ch) })
+        );
+
+    for (const child of processed) {
+        widget.vfunc_add_child(dummyBulder, child, type in child ? (child as any)[type] : null);
+    }
 }
 
 type Config<T extends Gtk.Widget> = {
@@ -58,15 +57,14 @@ export default function astalify<
 >(cls: { new (...args: any[]): Widget }, config: Partial<Config<Widget>> = {}) {
   // REPARACIÓN 1: Inyectar setter de 'setup' en el prototipo para evitar errores de GJS
   if (!Object.prototype.hasOwnProperty.call(cls.prototype, "setup")) {
-    Object.defineProperty(cls.prototype, "setup", {
-      set(callback: (self: Widget) => void) {
-        callback(this);
-      },
-      configurable: true,
-      enumerable: true,
-    });
+      Object.defineProperty(cls.prototype, "setup", {
+          set(callback) {
+              if (typeof callback === "function") callback(this);
+          },
+          configurable: true,
+          enumerable: true,
+      });
   }
-
   Object.assign(cls.prototype, {
     [setChildren](children: any[]) {
       const w = this as unknown as Widget;

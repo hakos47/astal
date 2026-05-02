@@ -2,10 +2,11 @@ import Astal from "gi://Astal?version=4.0"
 import Gtk from "gi://Gtk?version=4.0"
 import astalify, { type, type ConstructProps } from "./astalify.js"
 
-function filter(children: any[]) {
-    return children.flat(Infinity).map(ch => ch instanceof Gtk.Widget
+function filter(children: any) {
+    const arr = Array.isArray(children) ? children : (children ? [children] : []);
+    return arr.flat(Infinity).map(ch => ch instanceof Gtk.Widget
         ? ch
-        : new Gtk.Label({ visible: true, label: String(ch) }))
+        : new Gtk.Label({ visible: true, label: String(ch) }));
 }
 
 // Box
@@ -120,6 +121,21 @@ type SliderSignals = {
 export type SliderProps = ConstructProps<Astal.Slider, Astal.Slider.ConstructorProps, SliderSignals>
 export const Slider = astalify<Astal.Slider, Astal.Slider.ConstructorProps, SliderSignals>(Astal.Slider, {
     getChildren() { return [] },
+})
+
+// ScrolledWindow
+export type ScrolledWindowProps = ConstructProps<Gtk.ScrolledWindow, Gtk.ScrolledWindow.ConstructorProps>
+export const ScrolledWindow = astalify<Gtk.ScrolledWindow, Gtk.ScrolledWindow.ConstructorProps>(Gtk.ScrolledWindow, {
+    getChildren(self) {
+        return self.child ? [self.child] : []
+    },
+    setChildren(self, children) {
+        const ch = filter(children)
+        if (ch.length > 0) {
+            // GtkScrolledWindow solo acepta un hijo principal
+            self.set_child(ch[0])
+        }
+    },
 })
 
 // Stack
